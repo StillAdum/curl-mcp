@@ -1,27 +1,19 @@
-import { McpServer } from "@modelcontextprotocol/server";
-import { createMcpHandler } from "@modelcontextprotocol/server";
+import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
 
-const handler = createMcpHandler(() => {
-  const server = new McpServer(
-    {
-      name: "curl-mcp",
-      version: "1.0.0",
-    },
-    {
-      capabilities: {
-        tools: {},
-      },
-    },
-  );
+const mcpHandler = createMcpHandler(() => {
+  const server = new McpServer({
+    name: "curl-mcp",
+    version: "1.0.0",
+  });
 
   server.registerTool(
     "curl",
     {
-      title: "cURL HTTP Request",
+      title: "cURL",
       description:
-        "Make an HTTP request to a URL with a method, headers, query parameters and body.",
-      inputSchema: {
+        "Make an HTTP request with a URL, method, headers, query parameters, and body.",
+      inputSchema: z.object({
         url: z.string().url(),
         method: z
           .enum([
@@ -34,24 +26,13 @@ const handler = createMcpHandler(() => {
             "OPTIONS",
           ])
           .default("GET"),
-
         headers: z
           .record(z.string(), z.string())
           .optional()
-          .describe("HTTP headers such as Authorization, X-API-Key, etc."),
-
-        body: z
-          .string()
-          .optional()
-          .describe("Raw request body"),
-
-        timeout: z
-          .number()
-          .int()
-          .min(100)
-          .max(120000)
-          .default(30000),
-      },
+          .default({}),
+        body: z.string().optional(),
+        timeout: z.number().int().min(100).max(120000).default(30000),
+      }),
     },
     async ({ url, method, headers, body, timeout }) => {
       const controller = new AbortController();
@@ -63,9 +44,11 @@ const handler = createMcpHandler(() => {
       try {
         const response = await fetch(url, {
           method,
-          headers: headers ?? {},
+          headers,
           body:
-            method === "GET" || method === "HEAD" || method === "OPTIONS"
+            method === "GET" ||
+            method === "HEAD" ||
+            method === "OPTIONS"
               ? undefined
               : body,
           signal: controller.signal,
@@ -83,7 +66,7 @@ const handler = createMcpHandler(() => {
         return {
           content: [
             {
-              type: "text",
+              type: "text" as const,
               text: JSON.stringify(
                 {
                   status: response.status,
@@ -102,11 +85,12 @@ const handler = createMcpHandler(() => {
           isError: true,
           content: [
             {
-              type: "text",
+              type: "text" as const,
               text: JSON.stringify({
-                error: error instanceof Error
-                  ? error.message
-                  : String(error),
+                error:
+                  error instanceof Error
+                    ? error.message
+                    : String(error),
               }),
             },
           ],
@@ -120,4 +104,14 @@ const handler = createMcpHandler(() => {
   return server;
 });
 
-export { handler as GET, handler as POST, handler as DELETE };
+export async function GET(request: Request) {
+  return mcpHandler.fetch(request);
+}
+
+export async function POST(request: Request) {
+  return mcpHandler.fetch(request);
+}
+
+export async function DELETE(request: Request) {
+  return mcpHandler.fetch(request);
+}
